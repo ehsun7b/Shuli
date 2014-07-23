@@ -1,43 +1,92 @@
 package com.ehsunbehravesh.shuli.application;
 
 import com.ehsunbehravesh.shuli.exception.ApplicationException;
-import com.ehsunbehravesh.shuli.resource.Path;
 import com.ehsunbehravesh.shuli.resource.Resource;
+import com.ehsunbehravesh.shuli.resource.service.Path;
+import com.ehsunbehravesh.shuli.resource.service.Service;
+import com.sun.net.httpserver.Headers;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.URLConnection;
 import java.text.MessageFormat;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.reflections.Reflections;
 
 /**
  *
  * @author Ehsun Behravesh
  */
-public class Application {
+public abstract class Application {
 
-    protected final Properties config;
-    protected HashMap<String, Class<? extends Resource>> resources;
+    private static final int DEFAULT_PORT = 6265;
+    private static final int DEFAULT_BUFFER_SIZE = 2048;
+    private static final String DEFAULT_CONTEXT = "/";
+    private static final String DEFAULT_CONFIG_FILENAME = "shuli.properties";
 
-    public Application(InputStream inputStream) throws IOException, ApplicationException {
-        this.config = new Properties();
-        this.config.load(inputStream);
+    protected Properties config;
+    protected HashMap<String, Class<? extends Service>> services;
+    protected HashMap<String, Resource> resources;
+    protected int port;
+    protected String context;
+    protected int bufferSize;
 
-        init();
+    public Application() {
+        resources = new HashMap<>();
     }
 
-    public Application(Properties config) throws ApplicationException {
-        this.config = config;
+    protected void setup() throws Exception {
 
-        init();
     }
 
-    protected final void init() throws ApplicationException {
-        loadResources();
+    private void init() throws ApplicationException, IOException {
+        if (config == null) {
+            config = loadConfigFromClasspath();
+        }
+
+        if (port == 0) {
+            try {
+                port = Integer.parseInt(config.getProperty("port"));
+            } catch (NumberFormatException | NullPointerException ex) {
+                port = DEFAULT_PORT;
+            }
+        }
+
+        if (context == null) {
+            context = config.getProperty("context");
+            if (context == null) {
+                context = DEFAULT_CONTEXT;
+            }
+        }
+
+        if (!context.startsWith("/")) {
+            throw new ApplicationException("context must starts with /", null);
+        }
+
+        if (bufferSize == 0) {
+            try {
+                bufferSize = Integer.parseInt(config.getProperty("buffer_size"));
+            } catch (NumberFormatException | NullPointerException ex) {
+                bufferSize = DEFAULT_BUFFER_SIZE;
+            }
+        }
+
+        loadServices();
+        _showConfigAndResources();
     }
 
-    protected void loadResources() throws ApplicationException {
+    protected void loadServices() throws ApplicationException {
         String packag = config.getProperty(Config.SCAN_PACKAGE);
 
         if (packag == null) {
@@ -48,28 +97,192 @@ public class Application {
 
         Reflections reflections = new Reflections(packag);
 
-        Set<Class<?>> resourceClasses = reflections.getTypesAnnotatedWith(Path.class);
+        Set<Class<?>> serviceClasses = reflections.getTypesAnnotatedWith(Path.class);
         resources = new HashMap<>();
-        
-        for (Class<?> clasz : resourceClasses) {
-            if (Resource.class.isAssignableFrom(clasz)) {
-                Class<? extends Resource> resourceClass = (Class<? extends Resource>) clasz;
-                Path path = resourceClass.getAnnotation(Path.class);
+
+        for (Class<?> clasz : serviceClasses) {
+            if (Service.class.isAssignableFrom(clasz)) {
+                Class<? extends Service> serviceClass = (Class<? extends Service>) clasz;
+                Path path = serviceClass.getAnnotation(Path.class);
                 String pathValue = path.value();
-                
-                resources.put(pathValue, resourceClass);
+
+                services.put(pathValue, serviceClass);
             } else {
                 throw new ApplicationException(MessageFormat.format(
                         "Class {0} must extends {1}",
                         clasz.getCanonicalName(),
-                        Resource.class.getCanonicalName()), null);
+                        Service.class.getCanonicalName()), null);
             }
         }
     }
 
-    public static void main(String[] args) {
-        Reflections reflections = new Reflections("com.ehsunbehravesh");
+    private Properties loadConfigFromClasspath() throws IOException, ApplicationException {
+        InputStream configResource = Thread.currentThread().getContextClassLoader().getResourceAsStream(DEFAULT_CONFIG_FILENAME);
 
+        if (configResource == null) {
+            throw new ApplicationException(MessageFormat.format(
+                    "File {0} not found in the classpath. You may set the config manually in the setup method.",
+                    Application.DEFAULT_CONFIG_FILENAME), null);
+        }
+
+        Properties prop = new Properties();
+        prop.load(configResource);
+
+        return prop;
     }
 
+    public void start() throws ApplicationException, IOException {
+        try {
+            setup();
+            init();
+        } catch (Exception ex) {
+            throw new ApplicationException(ex.getMessage(), ex);
+        }
+
+        System.out.println("about to start on " + context + ":" + port);
+
+        InetSocketAddress addrress = new InetSocketAddress(port);
+        HttpServer server = HttpServer.create(addrress, 0);
+
+        server.createContext(context, new HttpHandler() {
+
+            @Override
+            public void handle(HttpExchange exchange) throws IOException {
+                handlerUpdate(exchange);
+            }
+        });
+        server.setExecutor(Executors.newCachedThreadPool());
+        server.start();
+
+        Logger.getGlobal().log(Level.INFO, "Shuli started: {0}:{1}{2}", new Object[]{addrress.getHostName(), String.valueOf(addrress.getPort()), context});
+        Logger.getGlobal().log(Level.INFO, "Press CTRL+C to stop the server.");
+    }
+
+    private void handlerUpdate(HttpExchange exchange) throws IOException {
+
+        URI requestURI = exchange.getRequestURI();
+        String path = requestURI.getPath().toLowerCase();
+
+        if (context.length() > 1) {
+            if (path.equals(context)) {
+                path = path.concat("/");
+            }
+
+            if (path.startsWith(context)) {
+                path = path.substring(context.length());
+            }
+        }
+
+        Resource resource = resources.get(path);
+
+        if (resource != null) {
+            if (exchange.getRequestMethod().equalsIgnoreCase("GET")) {
+                response(exchange, resource);
+            } else {
+                response405(exchange);
+            }
+        } else {
+            response404(exchange);
+        }
+    }
+
+    private void response404(HttpExchange exchange) {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
+    private void response405(HttpExchange exchange) {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
+    private void response(HttpExchange exchange, Resource resource) throws IOException {
+        Headers responseHeaders = exchange.getResponseHeaders();
+        responseHeaders.set("Content-Type", resource.getContentType());
+        exchange.sendResponseHeaders(200, 0);
+
+        try (OutputStream os = exchange.getResponseBody()) {
+            URLConnection connection = resource.getContentUrl().openConnection();
+            try (InputStream is = connection.getInputStream()) {
+                byte[] buffer = new byte[bufferSize];
+                int len;
+
+                while ((len = is.read(buffer)) > 0) {
+                    os.write(buffer, 0, len);
+                }
+            }
+        }
+
+        exchange.getResponseBody().close();
+    }
+
+    private void _showConfigAndResources() {
+        System.out.println(config);
+
+        Set<String> keySet = resources.keySet();
+        Iterator<String> iterator = keySet.iterator();
+
+        while (iterator.hasNext()) {
+            System.out.println("resource path: " + iterator.next());
+        }
+    }
+
+    public void loadConfig(InputStream inputStream) throws IOException {
+        config = new Properties();
+        config.load(inputStream);
+    }
+
+    public Properties getConfig() {
+        return config;
+    }
+
+    public void setConfig(Properties config) {
+        this.config = config;
+    }
+
+    public int getPort() {
+        return port;
+    }
+
+    public void setPort(int port) {
+        this.port = port;
+    }
+
+    public HashMap<String, Resource> getResources() {
+        return resources;
+    }
+
+    public void setResources(HashMap<String, Resource> resources) {
+        this.resources = resources;
+    }
+
+    public void addResource(String path, Resource resource) throws ApplicationException {
+        if (!path.startsWith("/")) {
+            throw new ApplicationException("path must starts with /", null);
+        }
+
+        resources.put(path, resource);
+    }
+
+    public Resource getResource(String path) {
+        return resources.get(path);
+    }
+
+    public String getContext() {
+        return context;
+    }
+
+    public void setContext(String context) throws ApplicationException {
+        if (!context.startsWith("/")) {
+            throw new ApplicationException("context must starts with /", null);
+        }
+
+        this.context = context;
+    }
+
+    public int getBufferSize() {
+        return bufferSize;
+    }
+
+    public void setBufferSize(int bufferSize) {
+        this.bufferSize = bufferSize;
+    }
 }

@@ -17,6 +17,5 @@ public class HTMLResource extends Resource {
     public HTMLResource(File contentFile) throws MalformedURLException {
         super(contentFile, "text/html");
     }
-
     
 }

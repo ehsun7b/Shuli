@@ -10,8 +10,7 @@ import java.net.URL;
  */
 public class Resource {
     
-    protected final URL contentUrl;
-    
+    protected final URL contentUrl;    
     protected final String contentType;
 
     public Resource(File contentFile, String contentType) throws MalformedURLException {
@@ -31,4 +30,5 @@ public class Resource {
     public String getContentType() {
         return contentType;
     }
+    
 }
