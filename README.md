@@ -28,10 +28,12 @@ public class App extends Application {
 <br/><br/>
 <h2>Configuration by properties file</h2>
 
-Include shuli.properties in your classpath
+Include ,b>shuli.properties</b> in your classpath
 
 ```properties
 scan_package=some.package
+port=6265
+context=app
 ```
 
 ```java
