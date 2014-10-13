@@ -25,4 +25,24 @@ public class App extends Application {
   }
 }
 ```
+<hr/>
+<h2>Configuration by properties file</h2>
 
+Include shuli.properties in your classpath
+
+scan_package=some.package
+
+```java
+public class App extends Application {
+
+  @Override
+  protected void setup() throws Exception {
+    addResource("/", new Resource(Thread.currentThread().getContextClassLoader().getResource("index.html"), "text/html"));
+  }
+
+  public static void main(String[] args) throws ApplicationException {
+    App app = new App();
+    app.start();
+  }
+}
+```
