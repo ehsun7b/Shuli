@@ -18,7 +18,7 @@ public class App extends Application {
     App app = new App();
 
     Properties config = new Properties();
-    config.setProperty("scan_package", "com.ehsunbehravesh");
+    config.setProperty("scan_package", "some.package");
     app.setConfig(config);
 
     app.start();
