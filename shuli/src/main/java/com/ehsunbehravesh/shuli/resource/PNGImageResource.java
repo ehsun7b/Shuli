@@ -10,13 +10,12 @@ import java.net.URL;
  */
 public class PNGImageResource extends Resource {
 
-    public PNGImageResource(URL contentUrl) {
-        super(contentUrl, "image/png");
-    }
+  public PNGImageResource(URL contentUrl) {
+    super(contentUrl, "image/png");
+  }
 
-    public PNGImageResource(File contentFile) throws MalformedURLException {
-        super(contentFile, "image/png");
-    }
+  public PNGImageResource(File contentFile) throws MalformedURLException {
+    super(contentFile, "image/png");
+  }
 
-    
 }

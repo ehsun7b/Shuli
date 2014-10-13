@@ -10,12 +10,12 @@ import java.net.URL;
  */
 public class XMLResource extends Resource {
 
-    public XMLResource(URL contentUrl) {
-        super(contentUrl, "application/xml");
-    }
+  public XMLResource(URL contentUrl) {
+    super(contentUrl, "application/xml");
+  }
 
-    public XMLResource(File contentFile) throws MalformedURLException {
-        super(contentFile, "application/xml");
-    }
+  public XMLResource(File contentFile) throws MalformedURLException {
+    super(contentFile, "application/xml");
+  }
 
 }

@@ -10,12 +10,12 @@ import java.net.URL;
  */
 public class HTMLResource extends Resource {
 
-    public HTMLResource(URL content) {
-        super(content, "text/html");
-    }
+  public HTMLResource(URL content) {
+    super(content, "text/html");
+  }
 
-    public HTMLResource(File contentFile) throws MalformedURLException {
-        super(contentFile, "text/html");
-    }
-    
+  public HTMLResource(File contentFile) throws MalformedURLException {
+    super(contentFile, "text/html");
+  }
+
 }

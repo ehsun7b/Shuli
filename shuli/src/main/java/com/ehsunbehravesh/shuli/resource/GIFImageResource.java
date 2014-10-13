@@ -10,12 +10,12 @@ import java.net.URL;
  */
 public class GIFImageResource extends Resource {
 
-    public GIFImageResource(URL contentUrl) {
-        super(contentUrl, "image/gif");
-    }
+  public GIFImageResource(URL contentUrl) {
+    super(contentUrl, "image/gif");
+  }
 
-    public GIFImageResource(File contentFile) throws MalformedURLException {
-        super(contentFile, "image/gif");
-    }
+  public GIFImageResource(File contentFile) throws MalformedURLException {
+    super(contentFile, "image/gif");
+  }
 
 }

@@ -9,26 +9,26 @@ import java.net.URL;
  * @author Ehsun Behravesh
  */
 public class Resource {
-    
-    protected final URL contentUrl;    
-    protected final String contentType;
 
-    public Resource(File contentFile, String contentType) throws MalformedURLException {
-        this.contentUrl = contentFile.toURI().toURL();
-        this.contentType = contentType;
-    }
-    
-    public Resource(URL contentUrl, String contentType) {
-        this.contentUrl = contentUrl;
-        this.contentType = contentType;
-    }
+  protected final URL contentUrl;
+  protected final String contentType;
 
-    public URL getContentUrl() {
-        return contentUrl;
-    }
+  public Resource(File contentFile, String contentType) throws MalformedURLException {
+    this.contentUrl = contentFile.toURI().toURL();
+    this.contentType = contentType;
+  }
 
-    public String getContentType() {
-        return contentType;
-    }
-    
+  public Resource(URL contentUrl, String contentType) {
+    this.contentUrl = contentUrl;
+    this.contentType = contentType;
+  }
+
+  public URL getContentUrl() {
+    return contentUrl;
+  }
+
+  public String getContentType() {
+    return contentType;
+  }
+
 }
