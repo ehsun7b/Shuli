@@ -33,7 +33,7 @@ Include ,b>shuli.properties</b> in your classpath
 ```properties
 scan_package=some.package
 port=6265
-context=app
+context=/app
 ```
 
 ```java
