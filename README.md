@@ -13,19 +13,15 @@ public class App extends Application {
   protected void setup() throws Exception {
     addResource("/", new Resource(Thread.currentThread().getContextClassLoader().getResource("index.html"), "text/html"));
   }
-  
-  public static void main(String[] args) {
-    try {
-      App app = new App();
 
-      Properties config = new Properties();
-      config.setProperty("scan_package", "package.to.be.scanned.for.services");
-      app.setConfig(config);
+  public static void main(String[] args) throws ApplicationException {
+    App app = new App();
 
-      app.start();
-    } catch (ApplicationException | IOException ex) {
-      Logger.getLogger(App.class.getName()).log(Level.SEVERE, "Error! {0}", ex.getMessage());
-    }
+    Properties config = new Properties();
+    config.setProperty("scan_package", "com.ehsunbehravesh");
+    app.setConfig(config);
+
+    app.start();
   }
 }
 ```
