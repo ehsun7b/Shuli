@@ -5,6 +5,7 @@ import com.ehsunbehravesh.shuli.resource.Resource;
 import com.ehsunbehravesh.shuli.resource.service.Get;
 import com.ehsunbehravesh.shuli.resource.service.Path;
 import com.ehsunbehravesh.shuli.resource.service.Post;
+import com.ehsunbehravesh.shuli.resource.service.Produces;
 import com.ehsunbehravesh.shuli.resource.service.Service;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
@@ -97,31 +98,30 @@ public abstract class Application {
     String packag = config.getProperty(Config.SCAN_PACKAGE);
 
     if (packag == null) {
-      throw new ApplicationException(MessageFormat.format(
-              "can not find the value for {0} in the application config file.",
-              Config.SCAN_PACKAGE), null);
-    }
+      log.warn(MessageFormat.format("{0} is null. You can set it in your configuration properties.", Config.SCAN_PACKAGE));
+    } else {
 
-    Reflections reflections = new Reflections(packag);
+      Reflections reflections = new Reflections(packag);
 
-    Set<Class<?>> serviceClasses = reflections.getTypesAnnotatedWith(Path.class);
+      Set<Class<?>> serviceClasses = reflections.getTypesAnnotatedWith(Path.class);
 
-    for (Class<?> clasz : serviceClasses) {
-      if (Service.class.isAssignableFrom(clasz)) {
-        Class<? extends Service> serviceClass = (Class<? extends Service>) clasz;
-        Path path = serviceClass.getAnnotation(Path.class);
-        String pathValue = path.value();
+      for (Class<?> clasz : serviceClasses) {
+        if (Service.class.isAssignableFrom(clasz)) {
+          Class<? extends Service> serviceClass = (Class<? extends Service>) clasz;
+          Path path = serviceClass.getAnnotation(Path.class);
+          String pathValue = path.value();
 
-        if (!pathValue.startsWith("/")) {
-          pathValue = "/".concat(pathValue);
+          if (!pathValue.startsWith("/")) {
+            pathValue = "/".concat(pathValue);
+          }
+
+          services.put(pathValue, serviceClass);
+        } else {
+          throw new ApplicationException(MessageFormat.format(
+                  "Class {0} must extends {1}",
+                  clasz.getCanonicalName(),
+                  Service.class.getCanonicalName()), null);
         }
-
-        services.put(pathValue, serviceClass);
-      } else {
-        throw new ApplicationException(MessageFormat.format(
-                "Class {0} must extends {1}",
-                clasz.getCanonicalName(),
-                Service.class.getCanonicalName()), null);
       }
     }
   }
@@ -149,8 +149,6 @@ public abstract class Application {
       throw new ApplicationException(ex.getMessage(), ex);
     }
 
-    log.debug(MessageFormat.format("About to start on {0}:{1}", new Object[]{context, port}));
-
     InetSocketAddress addrress = new InetSocketAddress(port);
     HttpServer server = HttpServer.create(addrress, 0);
 
@@ -159,6 +157,7 @@ public abstract class Application {
         handler(exchange);
       } catch (ApplicationException | InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException ex) {
         log.fatal(ex);
+        ex.printStackTrace();
       }
     });
     server.setExecutor(Executors.newCachedThreadPool());
@@ -169,7 +168,6 @@ public abstract class Application {
   }
 
   private void handler(HttpExchange exchange) throws IOException, ApplicationException, InstantiationException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
-
     URI requestURI = exchange.getRequestURI();
     String path = requestURI.getPath().toLowerCase();
 
@@ -193,8 +191,11 @@ public abstract class Application {
       }
     } else {
       String[] pathParts = extractServiceAndMethodPaths(path);
-      String servicePath = path.substring(0, path.indexOf("/", path.indexOf("/") + 1));
-      String methodPath = path.substring(path.indexOf("/", path.indexOf("/") + 1));
+
+      String servicePath = pathParts[0];
+      String methodPath = pathParts[1];
+
+      log.debug(MessageFormat.format("Service: class {0} method {1}", servicePath, methodPath));
 
       Class<? extends Service> service = services.get(servicePath);
 
@@ -251,12 +252,33 @@ public abstract class Application {
     exchange.getResponseBody().close();
   }
 
-  private void processRequest(HttpExchange exchange, String method, Class<? extends Service> service, String methodPath) throws ApplicationException, IOException, InstantiationException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
-    Method serviceMethod = getServiceMethod(service, methodPath, method);    
+  private void processRequest(HttpExchange exchange, String method,
+          Class<? extends Service> service, String methodPath)
+          throws ApplicationException, IOException, InstantiationException, IllegalAccessException,
+          IllegalArgumentException, InvocationTargetException {
+    Method serviceMethod = getServiceMethod(service, methodPath, method);
     log.debug(MessageFormat.format("Method is {0}", serviceMethod));
+
+    Produces producesAnnotation = serviceMethod.getAnnotation(Produces.class);
+    String produces = null;
+
+    if (producesAnnotation != null) {
+      produces = producesAnnotation.value();
+    }
 
     Service serviceInstance = service.newInstance();
     Object result = serviceMethod.invoke(serviceInstance);
+
+    Headers responseHeaders = exchange.getResponseHeaders();
+    if (produces != null) {
+      responseHeaders.set("Content-Type", produces);
+    }
+    exchange.sendResponseHeaders(200, 0);
+
+    try (OutputStream os = exchange.getResponseBody()) {
+      String toString = result.toString();
+      os.write(toString.getBytes("UTF-8"));
+    }
 
     exchange.getResponseBody().close();
   }
@@ -269,6 +291,10 @@ public abstract class Application {
       annotationClass = Get.class;
     } else if (method.equalsIgnoreCase("post")) {
       annotationClass = Post.class;
+    } else if (method.equalsIgnoreCase("head")) {
+      throw new ApplicationException("Method head is not supported yet!", null);
+    } else if (method.equalsIgnoreCase("option")) {
+      throw new ApplicationException("Method option is not supported yet!", null);
     } else {
       throw new ApplicationException(MessageFormat.format("Unknown http method {0}", method), null);
     }
